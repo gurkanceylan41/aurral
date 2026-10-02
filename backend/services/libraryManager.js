@@ -1642,6 +1642,7 @@ export class LibraryManager {
         trackedJobIds.push(activeJob.id);
         continue;
       }
+      if (options.skipCancelledTracks && matchingJobs.at(-1)?.status === "cancelled") continue;
 
       const completedJob = matchingJobs.find((job) => job.status === "done");
       if (completedJob) {
