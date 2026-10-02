@@ -61,7 +61,7 @@ After you change the option, Aurral reports how many albums it queued and why it
 
 Aurral checks monitored artists for new releases once a day. It does not touch albums that Lidarr manages. The **Existing albums** option applies only to Lidarr.
 
-Aurral also searches again for the missing tracks of every Aurral album with **Monitored** turned on, whatever the artist's option. By default it searches each album once a day, and it searches up to 25 albums an hour. A track you cancelled stays cancelled until you select **Retry**. To change the interval or turn the search off, open **Settings > Download clients > Quality profile** and go to **Missing tracks**.
+Aurral also searches again for the missing tracks of every Aurral album with **Monitored** turned on, whatever the artist's option. It waits at least a day after an album's last search or download, and it searches up to 25 albums an hour. After you cancel an album's downloads, Aurral leaves that album alone until you select **Retry**. To change the wait or turn the search off, open **Settings > Download clients > Quality profile** and go to **Missing tracks**.
 
 To stop monitoring one album, turn off **Monitored** on its Library page. If the album has unfinished downloads, Aurral asks you to confirm. It then cancels those downloads and keeps the finished tracks. The album stays unmonitored when you change the artist's option later.
 

@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useState } from "react";
 import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { GripVertical } from "lucide-react";
 import { SettingsInput } from "./SettingsField";
@@ -96,6 +97,7 @@ export function QualityProfileModal({
   const order = Array.isArray(profile.order) ? profile.order : Object.keys(QUALITY_TIER_LABELS);
   const enabled = new Set(Array.isArray(profile.enabled) ? profile.enabled : order);
   const cutoffIndex = order.indexOf(profile.cutoff);
+  const [intervalDraft, setIntervalDraft] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -175,17 +177,29 @@ export function QualityProfileModal({
         <SettingsModalField
           label="Search interval"
           htmlFor="missing-track-search-interval"
-          hint="Days between searches for each monitored album, up to 25 albums an hour. Cancelled tracks wait for Retry."
+          hint="Days to wait after an album's last search or download. Up to 25 albums an hour. Albums with cancelled downloads wait for Retry."
         >
           <SettingsInput
             id="missing-track-search-interval"
             type="number"
             min="1"
             max="365"
-            value={missingTrackSearch.intervalDays ?? 1}
+            value={intervalDraft ?? missingTrackSearch.intervalDays ?? 1}
             disabled={missingTrackSearch.enabled === false}
-            onChange={(event) =>
-              onMissingTrackSearchChange({ intervalDays: Number.parseInt(event.target.value, 10) || 1 })}
+            onChange={(event) => {
+              setIntervalDraft(event.target.value);
+              if (event.target.value !== "" && event.target.validity.valid) {
+                onMissingTrackSearchChange({ intervalDays: Number(event.target.value) });
+              }
+            }}
+            onBlur={(event) => {
+              const days = Math.round(Number(event.target.value));
+              if (event.target.value !== "" && Number.isFinite(days) && !event.target.validity.valid) {
+                const { min, max } = event.target;
+                onMissingTrackSearchChange({ intervalDays: Math.min(Number(max), Math.max(Number(min), days)) });
+              }
+              setIntervalDraft(null);
+            }}
           />
         </SettingsModalField>
       </SettingsModalSection>

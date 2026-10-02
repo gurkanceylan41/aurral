@@ -11,7 +11,10 @@ import {
 } from "../../services/downloadFolderConfig.js";
 import { normalizeExistingFileMode } from "../../services/weeklyFlow/weeklyFlowFileReuseMode.js";
 import { normalizeDateTimeFormat } from "../../config/constants.js";
-import { normalizeQualityProfile } from "../../services/qualityProfileModel.js";
+import {
+  normalizeIntervalDays,
+  normalizeQualityProfile,
+} from "../../services/qualityProfileModel.js";
 
 const getSettingStmt = db.prepare("SELECT value FROM settings WHERE key = ?");
 const upsertSettingStmt = db.prepare(
@@ -41,12 +44,9 @@ function normalizePlaylistArtworkSettings(raw) {
 
 function normalizeMissingTrackSearchSettings(raw) {
   const search = raw && typeof raw === "object" ? raw : {};
-  const parsedInterval = Number(search.intervalDays);
   return {
     enabled: search.enabled !== false,
-    intervalDays: Number.isFinite(parsedInterval)
-      ? Math.min(365, Math.max(1, Math.round(parsedInterval)))
-      : 1,
+    intervalDays: normalizeIntervalDays(search.intervalDays, 1),
   };
 }
 

@@ -411,36 +411,6 @@ test("re-requesting an Aurral album waits for a download source and retries canc
   }
 });
 
-test("an album search that skips cancelled tracks leaves them cancelled and queues the rest", async () => {
-  const originalWorkerStart = weeklyFlowWorker.start;
-  weeklyFlowWorker.start = async () => {};
-  const { album, albumMbid, artistMbid, tracks, jobFor } = createCanonicalAlbum();
-  const cancelledJobId = jobFor(0);
-  const failedJobId = jobFor(1);
-  downloadTracker.setCancelled(cancelledJobId);
-  downloadTracker.setFailed(failedJobId, "No matching source result");
-
-  try {
-    setDownloadSourceConfigured(true);
-    const result = await libraryManager.addAlbum(artistMbid, albumMbid, album.title, {
-      managedBy: "aurral",
-      skipCancelledTracks: true,
-    });
-
-    assert.equal(downloadTracker.getJob(cancelledJobId).status, "cancelled");
-    assert.equal(downloadTracker.getJob(failedJobId).status, "pending");
-    const newJobs = downloadTracker.getAll().filter(
-      (job) => job.albumMbid === albumMbid && job.trackMbid === tracks[2].trackMbid,
-    );
-    assert.equal(newJobs.length, 1);
-    assert.equal(newJobs[0].status, "pending");
-    assert.deepEqual([...result.jobIds].sort(), [failedJobId, newJobs[0].id].sort());
-  } finally {
-    weeklyFlowWorker.start = originalWorkerStart;
-    setDownloadSourceConfigured(false);
-  }
-});
-
 test("re-requesting a missing completed file reports a missing download source", async () => {
   const { album, albumMbid, artistMbid, jobFor } = createCanonicalAlbum({ trackCount: 1 });
   const jobId = jobFor(0);

@@ -3,19 +3,30 @@ import { cancelDownloadJobs } from "./weeklyFlow/weeklyFlowDownloadCancellation.
 import { cancelDownloadWorkForJobs } from "./weeklyFlow/weeklyFlowDownloadCancellationService.js";
 import { logger } from "./logger.js";
 
-const ACTIVE_JOB_STATUSES = new Set(["pending", "downloading", "cancel_requested"]);
+export const ACTIVE_JOB_STATUSES = new Set(["pending", "downloading", "cancel_requested"]);
 
 const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+
+const isAurralAlbumJob = (job) => job.playlistType === "library" && job.managedBy === "aurral";
 
 export function findAurralAlbumJobs(albumMbid) {
   const albumKey = normalizeKey(albumMbid);
   if (!albumKey) return [];
   return downloadTracker.getAll().filter(
-    (job) =>
-      job.playlistType === "library" &&
-      job.managedBy === "aurral" &&
-      normalizeKey(job.albumMbid) === albumKey,
+    (job) => isAurralAlbumJob(job) && normalizeKey(job.albumMbid) === albumKey,
   );
+}
+
+export function indexAurralAlbumJobs() {
+  const jobsByAlbum = new Map();
+  for (const job of downloadTracker.getAll()) {
+    const albumKey = normalizeKey(job.albumMbid);
+    if (!albumKey || !isAurralAlbumJob(job)) continue;
+    const jobs = jobsByAlbum.get(albumKey) || [];
+    jobs.push(job);
+    jobsByAlbum.set(albumKey, jobs);
+  }
+  return (albumMbid) => jobsByAlbum.get(normalizeKey(albumMbid)) || [];
 }
 
 export function jobMatchesTrack(job, track) {

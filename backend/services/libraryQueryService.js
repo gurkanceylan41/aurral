@@ -107,7 +107,7 @@ const CANONICAL_SELECT = `SELECT
   media.available AS media_available,
   media.created_at AS media_created_at`;
 
-const albumMediaCondition = (mediaAlias, albumTrackAlias) =>
+export const albumMediaCondition = (mediaAlias, albumTrackAlias) =>
   `(${mediaAlias}.album_id = ${albumTrackAlias}.album_id OR ${mediaAlias}.album_id IS NULL)`;
 
 const CANONICAL_FROM = `FROM library_artists AS artist

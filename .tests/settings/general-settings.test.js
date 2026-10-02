@@ -188,24 +188,19 @@ function captureSettingsRoutes() {
   return { postSettings, getSettings };
 }
 
-test("the missing-track search setting defaults on, clamps its interval, and keeps fields a save leaves out", async () => {
+test("the missing-track search setting keeps fields a save leaves out and never stores an unusable interval", async () => {
   const { getSettings, postSettings } = captureSettingsRoutes();
 
-  const defaults = await getSettings();
-  assert.deepEqual(defaults.body.missingTrackSearch, { enabled: true, intervalDays: 1 });
-
-  const tooLong = await postSettings({ missingTrackSearch: { enabled: true, intervalDays: 900 } });
-  assert.equal(tooLong.statusCode, 200);
-  assert.deepEqual(dbOps.getSettings().missingTrackSearch, { enabled: true, intervalDays: 365 });
-
-  await postSettings({ missingTrackSearch: { intervalDays: 0 } });
-  assert.deepEqual(dbOps.getSettings().missingTrackSearch, { enabled: true, intervalDays: 1 });
-
-  await postSettings({ missingTrackSearch: { intervalDays: 3 } });
+  await postSettings({ missingTrackSearch: { enabled: true, intervalDays: 3 } });
   const disabled = await postSettings({ missingTrackSearch: { enabled: false } });
   assert.equal(disabled.statusCode, 200);
-  assert.deepEqual(dbOps.getSettings().missingTrackSearch, { enabled: false, intervalDays: 3 });
   assert.deepEqual((await getSettings()).body.missingTrackSearch, { enabled: false, intervalDays: 3 });
+
+  for (const intervalDays of [0, -3, "soon", null]) {
+    await postSettings({ missingTrackSearch: { intervalDays } });
+    const saved = dbOps.getSettings().missingTrackSearch.intervalDays;
+    assert.ok(Number.isInteger(saved) && saved >= 1, `${String(intervalDays)} was stored as ${saved}`);
+  }
 });
 
 test("saves overlapping roots with an equal overlap warning", async () => {

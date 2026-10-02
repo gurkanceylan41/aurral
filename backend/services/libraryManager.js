@@ -52,6 +52,7 @@ import {
 } from "./downloadSourceService.js";
 import {
   listAurralArtistReleases,
+  MONITORED_AURRAL_ALBUM_CONDITION,
   resolveAurralMonitorMode,
   selectAurralReleases,
 } from "./aurralMonitoring.js";
@@ -99,6 +100,14 @@ let _artistsInflight = null;
 const _tracksCache = new Map();
 const _albumMonitoringUpdates = new Map();
 const _artistMonitoringUpdates = new Map();
+
+const monitoredAurralAlbumStmt = db.prepare(`
+  SELECT 1 FROM library_management AS management
+  JOIN library_albums AS album ON album.id = management.entity_id
+  WHERE management.entity_id = ? AND ${MONITORED_AURRAL_ALBUM_CONDITION}
+`);
+
+const isMonitoredAurralAlbum = (albumId) => Boolean(monitoredAurralAlbumStmt.get(Number(albumId)));
 
 async function serializeMonitoringUpdate(updates, id, update) {
   const previous = updates.get(id) || Promise.resolve();
@@ -1603,15 +1612,18 @@ export class LibraryManager {
     if (options.monitoringMode && !this._canAcquireMonitoredAlbum(options.artistMbid, album.mbid, options.monitoringMode)) {
       return { status: "skipped" };
     }
+    if (options.requireMonitoredAlbum && !isMonitoredAurralAlbum(album.id)) {
+      return { status: "skipped" };
+    }
 
     const artist = library.artists.find((entry) => entry.id === album.artistId);
     const mappedAlbum = mapCanonicalAlbum(album, artist, library.tracks);
     const albumMbid = album.mbid || album.releaseGroupMbid || null;
     const albumTracks = library.tracks.filter((track) => album.trackIds.includes(track.id));
-    const allAlbumJobs = findAurralAlbumJobs(albumMbid);
+    let albumJobs = findAurralAlbumJobs(albumMbid);
     const requestGroupId =
       options.requestGroupId ||
-      allAlbumJobs.find((job) => job.requestGroupId)?.requestGroupId ||
+      albumJobs.find((job) => job.requestGroupId)?.requestGroupId ||
       randomUUID();
     const albumTrackTitles = albumTracks.map((track) => track.title).filter(Boolean);
     const missingTracks = albumTracks.filter((track) => track.available !== true);
@@ -1619,14 +1631,16 @@ export class LibraryManager {
     const jobIds = [];
     const trackedJobIds = [];
     let blockedTracks = 0;
+    const canChangeJobs = () =>
+      (!options.monitoringMode ||
+        this._canAcquireMonitoredAlbum(options.artistMbid, albumMbid, options.monitoringMode)) &&
+      (!options.requireMonitoredAlbum || isMonitoredAurralAlbum(album.id));
     const applyJobChange = (change) => {
-      if (!options.monitoringMode) return { value: change() };
-      return db.transaction(() => {
-        if (!this._canAcquireMonitoredAlbum(options.artistMbid, albumMbid, options.monitoringMode)) {
-          return { skipped: true };
-        }
-        return { value: change() };
-      }).immediate();
+      const result = options.monitoringMode || options.requireMonitoredAlbum
+        ? db.transaction(() => (canChangeJobs() ? { value: change() } : { skipped: true })).immediate()
+        : { value: change() };
+      albumJobs = findAurralAlbumJobs(albumMbid);
+      return result;
     };
 
     for (const track of missingTracks) {
@@ -1634,7 +1648,7 @@ export class LibraryManager {
         return { status: "skipped" };
       }
       const relation = (track.albums || []).find((entry) => entry.albumId === album.id);
-      const matchingJobs = findAurralAlbumJobs(albumMbid).filter((job) => jobMatchesTrack(job, track));
+      const matchingJobs = albumJobs.filter((job) => jobMatchesTrack(job, track));
       const activeJob = matchingJobs.find((job) =>
         job.status === "pending" || job.status === "downloading" || job.status === "cancel_requested",
       );
@@ -1679,7 +1693,8 @@ export class LibraryManager {
 
       if (!sourceConfigured) continue;
 
-      const retryJob = matchingJobs.find((job) => job.status === "failed" || job.status === "cancelled");
+      const retryJob = matchingJobs.find((job) =>
+        job.status === "failed" || (!options.skipCancelledTracks && job.status === "cancelled"));
       if (retryJob) {
         const retriedJob = applyJobChange(() => {
           restoreDownloadJobCancellations([retryJob.id]);
@@ -2054,6 +2069,12 @@ export class LibraryManager {
       canonicalId: mappedAlbum.canonicalId,
       ...this._summarizeAurralAlbum(album, library.tracks),
     };
+  }
+
+  async searchAurralAlbumMissingTracks(canonicalId) {
+    const albumId = Number(canonicalId);
+    return serializeMonitoringUpdate(_albumMonitoringUpdates, albumId, () =>
+      this._finishAurralAlbum(albumId, { skipCancelledTracks: true, requireMonitoredAlbum: true }));
   }
 
   async cancelAurralAlbum(canonicalId) {
