@@ -1,9 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { parseFile } from "music-metadata";
-import { db } from "../config/db-sqlite.js";
 import { dbOps } from "../db/helpers/index.js";
-import { MONITORED_AURRAL_ALBUM_CONDITION, monitoredTrackCondition } from "./aurralMonitoring.js";
+import { indexUnmonitoredJobs } from "./aurralUnmonitoredJobs.js";
 import { resolvePlaylistRoot, isPathInsideRoot } from "./playlistPaths.js";
 import { getEnabledDownloadSources } from "./downloadSourceService.js";
 import { downloadTracker } from "./weeklyFlow/weeklyFlowDownloadTracker.js";
@@ -16,29 +15,6 @@ import {
 } from "./qualityProfileModel.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const frozenLibraryFileStmt = db.prepare(`
-  SELECT 1
-  FROM library_media_files AS media
-  JOIN library_tracks AS track ON track.id = media.track_id
-  WHERE media.source = 'aurral'
-    AND media.path = ?
-    AND (
-      NOT (${monitoredTrackCondition("track")})
-      OR EXISTS (
-        SELECT 1
-        FROM library_management AS management
-        JOIN library_albums AS album ON album.id = management.entity_id
-        WHERE management.entity_kind = 'album'
-          AND management.entity_id = media.album_id
-          AND management.managed_by = 'aurral'
-          AND NOT (${MONITORED_AURRAL_ALBUM_CONDITION})
-      )
-    )
-  LIMIT 1
-`);
-
-const isFrozenLibraryFile = (filePath) => Boolean(frozenLibraryFileStmt.get(filePath));
 
 export function getQualityProfile() {
   const settings = dbOps.getSettings();
@@ -191,6 +167,7 @@ export async function runQualityUpgradeCheck({ force = false, playlistId = null,
   const profile = getQualityProfile();
   if (!force && !profile.automaticUpgrades) return 0;
   const dueBefore = Date.now() - profile.intervalDays * DAY_MS;
+  const isUnmonitored = indexUnmonitoredJobs();
   const seen = new Set();
   let queued = 0;
   for (const job of downloadTracker.getAll()) {
@@ -200,7 +177,7 @@ export async function runQualityUpgradeCheck({ force = false, playlistId = null,
     const filePath = path.resolve(job.finalPath);
     if (seen.has(filePath)) continue;
     seen.add(filePath);
-    if (!isAurralOwnedPath(filePath) || isFrozenLibraryFile(filePath)) continue;
+    if (!isAurralOwnedPath(filePath) || isUnmonitored(job)) continue;
     if (!job.qualityCheckedAt) await classifyQualityJob(job);
     const current = downloadTracker.getJob(job.id);
     if (getQualityState({ tier: current?.qualityTier }, profile) === "preferred") continue;

@@ -7,7 +7,7 @@ export const ACTIVE_JOB_STATUSES = new Set(["pending", "downloading", "cancel_re
 
 const normalizeKey = (value) => String(value || "").trim().toLowerCase();
 
-const isAurralAlbumJob = (job) => job.playlistType === "library" && job.managedBy === "aurral";
+export const isAurralAlbumJob = (job) => job.playlistType === "library" && job.managedBy === "aurral";
 
 export function findAurralAlbumJobs(albumMbid) {
   const albumKey = normalizeKey(albumMbid);
