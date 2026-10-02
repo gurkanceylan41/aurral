@@ -1,4 +1,5 @@
 import { db } from "../config/db-sqlite.js";
+import { dbOps } from "../db/helpers/index.js";
 import { jobMatchesTrack } from "./aurralAlbumJobs.js";
 import { recordMissingTrackSearch } from "./aurralHistoryService.js";
 import { isAnyDownloadSourceConfigured } from "./downloadSourceService.js";
@@ -9,7 +10,6 @@ import { downloadTracker } from "./weeklyFlow/weeklyFlowDownloadTracker.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ACTIVE_JOB_STATUSES = new Set(["pending", "downloading", "cancel_requested"]);
 const UNSEARCHABLE_JOB_STATUSES = new Set(["cancelled", "blocked"]);
-const MISSING_TRACK_SEARCH_SETTINGS = { enabled: true, intervalDays: 1 };
 
 const MISSING_TRACK_CONDITION = `
   NOT EXISTS (
@@ -109,7 +109,7 @@ async function searchAlbumMissingTracks(album) {
 }
 
 export async function runMissingTrackSearch({ limit = 25 } = {}) {
-  const settings = MISSING_TRACK_SEARCH_SETTINGS;
+  const settings = dbOps.getSettings().missingTrackSearch;
   if (!settings.enabled || !isAnyDownloadSourceConfigured()) return 0;
   const jobsByAlbum = indexAurralAlbumJobs();
   const dueAlbums = [];

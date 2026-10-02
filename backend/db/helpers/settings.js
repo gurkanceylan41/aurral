@@ -39,6 +39,17 @@ function normalizePlaylistArtworkSettings(raw) {
   };
 }
 
+function normalizeMissingTrackSearchSettings(raw) {
+  const search = raw && typeof raw === "object" ? raw : {};
+  const parsedInterval = Number(search.intervalDays);
+  return {
+    enabled: search.enabled !== false,
+    intervalDays: Number.isFinite(parsedInterval)
+      ? Math.min(365, Math.max(1, Math.round(parsedInterval)))
+      : 1,
+  };
+}
+
 function normalizePlaylistWorkerSettings(raw) {
   const worker = raw && typeof raw === "object" ? raw : {};
   const parsedConcurrency = Number(worker.concurrency);
@@ -170,6 +181,9 @@ export const dbOps = {
     const playlistArtwork = normalizePlaylistArtworkSettings(
       readStoredSettingJson("playlistArtwork"),
     );
+    const missingTrackSearch = normalizeMissingTrackSearchSettings(
+      readStoredSettingJson("missingTrackSearch"),
+    );
     const inbox = dbHelpers.parseJSON(getSettingStmt.get("inbox")?.value) || {};
     const blocklist = dbHelpers.parseJSON(
       getSettingStmt.get("blocklist")?.value
@@ -212,6 +226,7 @@ export const dbOps = {
       },
       playlistWorker,
       playlistArtwork,
+      missingTrackSearch,
       inbox: {
         enabled: inbox.enabled !== false,
         releases: inbox.releases !== false,
@@ -377,6 +392,14 @@ export const dbOps = {
           "playlistArtwork",
           dbHelpers.stringifyJSON(
             normalizePlaylistArtworkSettings(settings.playlistArtwork),
+          ),
+        );
+      }
+      if (settings.missingTrackSearch !== undefined) {
+        upsertSettingStmt.run(
+          "missingTrackSearch",
+          dbHelpers.stringifyJSON(
+            normalizeMissingTrackSearchSettings(settings.missingTrackSearch),
           ),
         );
       }

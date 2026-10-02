@@ -204,6 +204,24 @@ test("an album searched within the interval waits while an older search is due",
   assert.equal(albumJobs(stale.albumMbid).length, 1);
 });
 
+test("the stored interval and switch control the run", async () => {
+  const settings = dbOps.getSettings();
+  const withinInterval = createAlbum({ lastSearchedAt: Date.now() - 2 * DAY_MS });
+  const pastInterval = createAlbum({ lastSearchedAt: Date.now() - 4 * DAY_MS });
+  try {
+    dbOps.updateSettings({ ...settings, missingTrackSearch: { enabled: false, intervalDays: 3 } });
+    assert.equal(await runMissingTrackSearch(), 0);
+    assert.equal(albumJobs(pastInterval.albumMbid).length, 0);
+
+    dbOps.updateSettings({ ...settings, missingTrackSearch: { enabled: true, intervalDays: 3 } });
+    assert.equal(await runMissingTrackSearch(), 1);
+    assert.equal(albumJobs(withinInterval.albumMbid).length, 0);
+    assert.equal(albumJobs(pastInterval.albumMbid).length, 1);
+  } finally {
+    dbOps.updateSettings(settings);
+  }
+});
+
 test("a run searches at most 25 albums, oldest first, and complete albums do not take a slot", async () => {
   const complete = [
     createAlbum({ tracks: ["available"] }),
