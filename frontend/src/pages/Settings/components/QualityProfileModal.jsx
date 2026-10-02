@@ -86,7 +86,13 @@ function SortableQuality({ id, enabled, cutoff, aboveCutoff, onToggle, onCutoff 
   );
 }
 
-export function QualityProfileModal({ profile, onChange, onClose }) {
+export function QualityProfileModal({
+  profile,
+  onChange,
+  missingTrackSearch,
+  onMissingTrackSearchChange,
+  onClose,
+}) {
   const order = Array.isArray(profile.order) ? profile.order : Object.keys(QUALITY_TIER_LABELS);
   const enabled = new Set(Array.isArray(profile.enabled) ? profile.enabled : order);
   const cutoffIndex = order.indexOf(profile.cutoff);
@@ -157,6 +163,29 @@ export function QualityProfileModal({ profile, onChange, onClose }) {
             value={profile.intervalDays ?? 2}
             disabled={profile.automaticUpgrades !== true}
             onChange={(event) => onChange({ intervalDays: Number.parseInt(event.target.value, 10) || 2 })}
+          />
+        </SettingsModalField>
+      </SettingsModalSection>
+      <SettingsModalSection title="Missing tracks">
+        <SettingsModalToggle
+          label="Search again for missing tracks"
+          checked={missingTrackSearch.enabled !== false}
+          onChange={(event) => onMissingTrackSearchChange({ enabled: event.target.checked })}
+        />
+        <SettingsModalField
+          label="Search interval"
+          htmlFor="missing-track-search-interval"
+          hint="Days between searches for each monitored album, up to 25 albums an hour. Cancelled tracks wait for Retry."
+        >
+          <SettingsInput
+            id="missing-track-search-interval"
+            type="number"
+            min="1"
+            max="365"
+            value={missingTrackSearch.intervalDays ?? 1}
+            disabled={missingTrackSearch.enabled === false}
+            onChange={(event) =>
+              onMissingTrackSearchChange({ intervalDays: Number.parseInt(event.target.value, 10) || 1 })}
           />
         </SettingsModalField>
       </SettingsModalSection>
