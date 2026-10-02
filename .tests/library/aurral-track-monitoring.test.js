@@ -169,6 +169,37 @@ test("monitoring a track in an unmonitored album queues nothing", async () => {
   assert.equal(albumJobs(albumMbid).length, 0);
 });
 
+test("a track unmonitored while its album is turned back on is not queued", async () => {
+  const { album, albumMbid, tracks } = await createAlbum({ monitored: false, tracks: ["missing", "missing"] });
+  const missingFileJob = downloadTracker.addJob(
+    { artistName: "Monitoring Artist", trackName: tracks[0].title, albumName: album.title, albumMbid, trackMbid: tracks[0].mbid, managedBy: "aurral" },
+    "library",
+  );
+  downloadTracker.setDone(missingFileJob, path.join(isolatedState.dataDir, "gone", "1.flac"), album.title);
+
+  const monitoring = libraryManager.setAurralAlbumMonitoring(album.id, { monitored: true });
+  for (let turn = 0; turn < 50; turn += 1) await Promise.resolve();
+  db.prepare("UPDATE library_tracks SET monitored = 0 WHERE id = ?").run(tracks[1].id);
+  await monitoring;
+
+  assert.equal(albumJobs(albumMbid).some((job) => job.trackMbid === tracks[1].mbid), false);
+});
+
+test("unmonitoring a track without an MBID leaves a same-titled track's download alone", async () => {
+  const { album, albumMbid, tracks, jobIds } = await createAlbum({ tracks: ["missing", "pending"] });
+  const untagged = libraryStore.upsertLibraryTrack({
+    identityKey: `track:untagged-${album.id}`,
+    title: tracks[1].title,
+    artistName: "Monitoring Artist",
+  });
+  libraryStore.linkLibraryAlbumTrack({ albumId: album.id, trackId: untagged.id, trackNumber: 3 });
+
+  await libraryManager.setAurralTrackMonitoring(untagged.id, { monitored: false });
+
+  assert.equal(downloadTracker.getJob(jobIds[1]).status, "pending");
+  assert.equal(albumJobs(albumMbid).filter((job) => job.status === "cancelled").length, 0);
+});
+
 test("a Lidarr-managed track is refused without calling Lidarr", async () => {
   const { tracks } = await createAlbum({ managedBy: "lidarr", tracks: ["available"] });
 

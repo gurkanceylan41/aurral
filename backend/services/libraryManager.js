@@ -1654,12 +1654,10 @@ export class LibraryManager {
         this._canAcquireMonitoredAlbum(options.artistMbid, albumMbid, options.monitoringMode)) &&
       (!options.requireMonitoredAlbum || isMonitoredAurralAlbum(album.id));
     const applyJobChange = (change, trackId) => {
-      const result = options.monitoringMode || options.requireMonitoredAlbum
-        ? db.transaction(() => {
-          if (!canChangeJobs()) return { skipped: true };
-          return isMonitoredTrack(trackId) ? { value: change() } : { trackSkipped: true };
-        }).immediate()
-        : { value: change() };
+      const result = db.transaction(() => {
+        if (!canChangeJobs()) return { skipped: true };
+        return isMonitoredTrack(trackId) ? { value: change() } : { trackSkipped: true };
+      }).immediate();
       albumJobs = findAurralAlbumJobs(albumMbid);
       return result;
     };

@@ -2,6 +2,7 @@ import path from "path";
 import { db } from "../config/db-sqlite.js";
 import { isAurralAlbumJob, jobMatchesTrack } from "./aurralAlbumJobs.js";
 import { MONITORED_AURRAL_ALBUM_CONDITION, monitoredTrackCondition } from "./aurralMonitoring.js";
+import { albumMediaCondition } from "./libraryQueryService.js";
 
 const UNMONITORED_AURRAL_ALBUM_CONDITION = `EXISTS (
   SELECT 1
@@ -16,9 +17,18 @@ const unmonitoredFilePathsStmt = db.prepare(`
   SELECT media.path
   FROM library_media_files AS media
   JOIN library_tracks AS track ON track.id = media.track_id
-  LEFT JOIN library_albums AS album ON album.id = media.album_id
   WHERE media.source = 'aurral'
-    AND (NOT (${monitoredTrackCondition("track")}) OR ${UNMONITORED_AURRAL_ALBUM_CONDITION})
+    AND (
+      NOT (${monitoredTrackCondition("track")})
+      OR EXISTS (
+        SELECT 1
+        FROM library_album_tracks AS album_track
+        JOIN library_albums AS album ON album.id = album_track.album_id
+        WHERE album_track.track_id = media.track_id
+          AND ${albumMediaCondition("media", "album_track")}
+          AND ${UNMONITORED_AURRAL_ALBUM_CONDITION}
+      )
+    )
 `).pluck();
 
 const unmonitoredAlbumsStmt = db.prepare(`

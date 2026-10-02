@@ -1420,6 +1420,7 @@ function LibraryPage() {
         Array.isArray(data?.tracks) ? { ...data, tracks: data.tracks.map(mark) } : data,
       );
       clearCanonicalLibraryPageCache();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.libraryViewPrefix });
       refreshLibraryActivity();
     },
     [refreshLibraryActivity, setLibrary],

@@ -49,6 +49,7 @@ async function createLibraryJob({
   trackMonitored = true,
   inLibrary = true,
   jobHasAlbum = true,
+  fileHasAlbum = true,
 } = {}) {
   sequence += 1;
   const suffix = String(sequence).padStart(12, "0");
@@ -101,7 +102,12 @@ async function createLibraryJob({
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, "audio");
   if (inLibrary) {
-    libraryStore.upsertLibraryMediaFile({ trackId: track.id, albumId: album.id, source: "aurral", path: filePath });
+    libraryStore.upsertLibraryMediaFile({
+      trackId: track.id,
+      albumId: fileHasAlbum ? album.id : null,
+      source: "aurral",
+      path: filePath,
+    });
   }
   downloadTracker.setDone(jobId, filePath, album.title);
   downloadTracker.updateQuality(jobId, { tier: "mp3-128", format: "mp3" });
@@ -177,6 +183,11 @@ test("Search all in Wanted skips unmonitored albums and tracks", async () => {
   const fileOfUnmonitoredTrack = await createLibraryJob({ trackMonitored: false });
   const fileOutsideLibrary = await createLibraryJob({ inLibrary: false });
   const olderJobOfUnmonitoredTrack = await createLibraryJob({ trackMonitored: false, jobHasAlbum: false });
+  const olderFileInUnmonitoredAlbum = await createLibraryJob({
+    albumMonitored: false,
+    jobHasAlbum: false,
+    fileHasAlbum: false,
+  });
 
   const missing = await request("/research-missing", { method: "POST" });
   const upgrades = await request("/quality-upgrades", { method: "POST" });
@@ -190,8 +201,14 @@ test("Search all in Wanted skips unmonitored albums and tracks", async () => {
   const upgraded = upgradedJobIds();
   assert.equal(upgrades.queued, 2);
   assert.deepEqual(
-    [monitoredFile, fileInUnmonitoredAlbum, fileOfUnmonitoredTrack, fileOutsideLibrary, olderJobOfUnmonitoredTrack]
-      .map((jobId) => upgraded.has(jobId)),
-    [true, false, false, true, false],
+    [
+      monitoredFile,
+      fileInUnmonitoredAlbum,
+      fileOfUnmonitoredTrack,
+      fileOutsideLibrary,
+      olderJobOfUnmonitoredTrack,
+      olderFileInUnmonitoredAlbum,
+    ].map((jobId) => upgraded.has(jobId)),
+    [true, false, false, true, false, false],
   );
 });

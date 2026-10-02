@@ -33,6 +33,7 @@ export function jobMatchesTrack(job, track) {
   if (job.trackMbid && track.mbid) {
     return normalizeKey(job.trackMbid) === normalizeKey(track.mbid);
   }
+  if (job.trackMbid) return false;
   return normalizeKey(job.trackName) === normalizeKey(track.title);
 }
 
