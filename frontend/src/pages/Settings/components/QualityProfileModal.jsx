@@ -177,7 +177,7 @@ export function QualityProfileModal({
         <SettingsModalField
           label="Search interval"
           htmlFor="missing-track-search-interval"
-          hint="Days to wait after an album's last search or download. Up to 25 albums an hour. Albums with cancelled downloads wait for Retry."
+          hint="Checked once a day. Days to wait after an album's last search or download. Albums with cancelled downloads wait for Retry."
         >
           <SettingsInput
             id="missing-track-search-interval"
