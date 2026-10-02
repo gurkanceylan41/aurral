@@ -8,8 +8,8 @@ import { libraryManager } from "./libraryManager.js";
 import { albumMediaCondition } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const ALBUMS_PER_RUN = 25;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 const MISSING_TRACK_CONDITION = `
   NOT EXISTS (
@@ -66,7 +66,7 @@ function hasSearchableMissingTrack(album, jobs) {
 }
 
 function selectDueAlbums(intervalDays) {
-  const dueBefore = Date.now() - intervalDays * DAY_MS;
+  const dueBefore = Date.now() - intervalDays * DAY_MS + HOUR_MS;
   const jobsForAlbum = indexAurralAlbumJobs();
   const candidates = candidateAlbumsStmt.all(dueBefore)
     .map((album) => {
@@ -76,12 +76,9 @@ function selectDueAlbums(intervalDays) {
     })
     .filter(({ jobs, lastActivityAt }) => lastActivityAt <= dueBefore && !jobs.some(isActiveOrCancelled))
     .sort((left, right) => left.lastActivityAt - right.lastActivityAt || left.album.id - right.album.id);
-  const dueAlbums = [];
-  for (const { album, jobs } of candidates) {
-    if (dueAlbums.length >= ALBUMS_PER_RUN) break;
-    if (hasSearchableMissingTrack(album, jobs)) dueAlbums.push(album);
-  }
-  return dueAlbums;
+  return candidates
+    .filter(({ album, jobs }) => hasSearchableMissingTrack(album, jobs))
+    .map(({ album }) => album);
 }
 
 async function searchAlbumMissingTracks(album) {

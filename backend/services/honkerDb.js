@@ -135,7 +135,7 @@ export const SCHEDULED_SYSTEM_TASKS = [
   {
     name: "aurral-missing-track-search",
     queue: "system-task",
-    schedule: "@every 1h",
+    schedule: "@every 24h",
     payload: { kind: "aurral-missing-track-search" },
   },
   {

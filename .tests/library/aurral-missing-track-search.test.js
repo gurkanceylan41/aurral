@@ -261,21 +261,31 @@ test("an album waits a full interval after its last download attempt", async () 
   assert.equal(downloadTracker.getJob(failedLongAgo.jobIds[0]).status, "pending");
 });
 
-test("a run searches at most 25 albums, oldest first, and complete albums do not take a slot", async () => {
+test("a run searches every due album and leaves complete albums alone", async () => {
   const complete = [
     createAlbum({ tracks: ["available"] }),
     createAlbum({ tracks: ["available", "available"] }),
   ];
-  const due = Array.from({ length: 26 }, (_, index) =>
+  const due = Array.from({ length: 30 }, (_, index) =>
     createAlbum({ lastSearchedAt: Date.now() - (60 - index) * DAY_MS }),
   );
 
   const searched = await runMissingTrackSearch();
 
-  assert.equal(searched, 25);
-  for (const album of due.slice(0, 25)) assert.equal(albumJobs(album.albumMbid).length, 1);
-  assert.equal(albumJobs(due[25].albumMbid).length, 0);
+  assert.equal(searched, due.length);
+  for (const album of due) assert.equal(albumJobs(album.albumMbid).length, 1);
   for (const album of complete) assert.equal(searchTime(album.album.id), null);
+});
+
+test("a daily run counts an album as due when its wait ends within the hour", async () => {
+  const almostDue = createAlbum({ lastSearchedAt: Date.now() - DAY_MS + 30 * 60 * 1000 });
+  const notYetDue = createAlbum({ lastSearchedAt: Date.now() - DAY_MS + 2 * HOUR_MS });
+
+  const searched = await runMissingTrackSearch();
+
+  assert.equal(searched, 1);
+  assert.equal(albumJobs(almostDue.albumMbid).length, 1);
+  assert.equal(albumJobs(notYetDue.albumMbid).length, 0);
 });
 
 test("only monitored Aurral albums without cancelled or active downloads are searched", async () => {
