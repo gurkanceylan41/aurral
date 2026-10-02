@@ -78,7 +78,6 @@ const defaultSettings = {
       discoveryPeriod: "1month",
       discoveryAutoRefreshHours: 168,
       discoveryRecommendationsPerRefresh: 200,
-      discoveryPersonalizedEnabled: true,
       discoveryMode: "balanced",
     },
     slskd: {
