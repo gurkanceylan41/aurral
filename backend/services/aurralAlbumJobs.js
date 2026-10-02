@@ -120,10 +120,7 @@ export function summarizeAurralAlbum({ tracks = [], jobs = [], sourceConfigured,
   };
 }
 
-export async function cancelAurralAlbumJobs(albumMbid) {
-  const activeJobs = findAurralAlbumJobs(albumMbid).filter((job) =>
-    ACTIVE_JOB_STATUSES.has(job.status),
-  );
+async function cancelActiveAurralJobs(activeJobs, albumMbid) {
   if (activeJobs.length === 0) {
     return { cancelledJobIds: [], cleanupFailed: false };
   }
@@ -153,4 +150,19 @@ export async function cancelAurralAlbumJobs(albumMbid) {
     downloadTracker.setCancelled(jobId);
   }
   return { cancelledJobIds: jobIds, cleanupFailed: false };
+}
+
+export async function cancelAurralAlbumJobs(albumMbid) {
+  return cancelActiveAurralJobs(
+    findAurralAlbumJobs(albumMbid).filter((job) => ACTIVE_JOB_STATUSES.has(job.status)),
+    albumMbid,
+  );
+}
+
+export async function cancelAurralTrackJobs(albumMbid, track) {
+  return cancelActiveAurralJobs(
+    findAurralAlbumJobs(albumMbid).filter((job) =>
+      ACTIVE_JOB_STATUSES.has(job.status) && jobMatchesTrack(job, track)),
+    albumMbid,
+  );
 }
