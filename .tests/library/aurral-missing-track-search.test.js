@@ -14,6 +14,8 @@ const [
   { weeklyFlowWorker },
   { lidarrClient },
   { runMissingTrackSearch },
+  { SCHEDULED_SYSTEM_TASKS },
+  { processSystemTask },
 ] = await setupIsolatedBackend(
   "aurral-missing-track-search",
   "backend/config/db-sqlite.js",
@@ -24,6 +26,8 @@ const [
   "backend/services/weeklyFlow/weeklyFlowWorker.js",
   "backend/services/lidarrClient.js",
   "backend/services/aurralMissingTrackSearch.js",
+  "backend/services/honkerDb.js",
+  "backend/services/systemTaskWorker.js",
 );
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -287,4 +291,17 @@ test("an album that fails is marked as searched and the run continues", async ()
   assert.equal(searched, 2);
   assert.ok(searchTime(broken.album.id) >= startedAt);
   assert.equal(albumJobs(healthy.albumMbid).length, 1);
+});
+
+test("the scheduled system task searches due albums", async () => {
+  const scheduled = SCHEDULED_SYSTEM_TASKS.find(
+    (task) => task.payload?.kind === "aurral-missing-track-search",
+  );
+  assert.ok(scheduled, "the missing-track search has a schedule");
+  const { albumMbid } = createAlbum({ tracks: ["failed", "missing"] });
+
+  await processSystemTask(scheduled.payload);
+
+  assert.deepEqual(albumJobs(albumMbid).map((job) => job.status), ["pending", "pending"]);
+  assert.deepEqual(lidarrCalls, []);
 });
