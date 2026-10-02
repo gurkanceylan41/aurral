@@ -1,5 +1,6 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { cleanupIsolatedState, setupIsolatedBackend } from "../helpers/backendTestHarness.js";
@@ -19,6 +20,7 @@ const [
   { runMissingTrackSearch },
   { SCHEDULED_SYSTEM_TASKS },
   { processSystemTask },
+  { scanMusicRoot },
 ] = await setupIsolatedBackend(
   "aurral-missing-track-search",
   "backend/config/db-sqlite.js",
@@ -34,6 +36,7 @@ const [
   "backend/services/aurralMissingTrackSearch.js",
   "backend/services/honkerDb.js",
   "backend/services/systemTaskWorker.js",
+  "backend/services/libraryFileScanner.js",
 );
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -397,6 +400,37 @@ test("a library rescan keeps a track unmonitored, and the Library reports it", (
   const monitoredById = new Map(library.tracks.map((track) => [track.id, track.monitored]));
   assert.equal(monitoredById.get(tracks[0].id), false);
   assert.equal(monitoredById.get(tracks[1].id), true);
+});
+
+test("scanning an album's downloaded file keeps the album monitored and searched", async () => {
+  const { artist, album, albumMbid, tracks } = createAlbum({ tracks: ["missing", "missing"] });
+  const root = path.join(isolatedState.dataDir, `scan-${album.id}`);
+  const filePath = path.join(root, artist.name, album.title, "01 Track 1.flac");
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, "audio");
+
+  await scanMusicRoot({
+    rootPath: root,
+    source: "aurral",
+    filePaths: [filePath],
+    metadataReader: async () => ({
+      common: {
+        albumartist: artist.name,
+        artist: artist.name,
+        album: album.title,
+        title: tracks[0].title,
+        track: { no: 1, of: 2 },
+        musicbrainz_albumartistid: artist.mbid,
+        musicbrainz_releasegroupid: albumMbid,
+        musicbrainz_recordingid: tracks[0].mbid,
+      },
+      format: {},
+    }),
+  });
+
+  assert.equal(await runMissingTrackSearch(), 1);
+  assert.deepEqual(albumJobs(albumMbid).map((job) => job.trackMbid), [tracks[1].mbid]);
+  assert.equal(getCanonicalLibraryForAlbumIds({ ids: [album.id] }).albums[0].monitored, true);
 });
 
 test("searching an album leaves cancelled tracks alone, including an older cancelled job", async () => {
