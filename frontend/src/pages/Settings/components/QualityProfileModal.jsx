@@ -171,7 +171,7 @@ export function QualityProfileModal({
       <SettingsModalSection title="Missing tracks">
         <SettingsModalToggle
           label="Search again for missing tracks"
-          checked={missingTrackSearch.enabled !== false}
+          checked={missingTrackSearch.enabled === true}
           onChange={(event) => onMissingTrackSearchChange({ enabled: event.target.checked })}
         />
         <SettingsModalField
@@ -185,7 +185,7 @@ export function QualityProfileModal({
             min="1"
             max="365"
             value={intervalDraft ?? missingTrackSearch.intervalDays ?? 1}
-            disabled={missingTrackSearch.enabled === false}
+            disabled={missingTrackSearch.enabled !== true}
             onChange={(event) => {
               setIntervalDraft(event.target.value);
               if (event.target.value !== "" && event.target.validity.valid) {

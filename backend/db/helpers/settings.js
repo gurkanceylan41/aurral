@@ -45,7 +45,7 @@ function normalizePlaylistArtworkSettings(raw) {
 function normalizeMissingTrackSearchSettings(raw) {
   const search = raw && typeof raw === "object" ? raw : {};
   return {
-    enabled: search.enabled !== false,
+    enabled: search.enabled === true,
     intervalDays: normalizeIntervalDays(search.intervalDays, 1),
   };
 }

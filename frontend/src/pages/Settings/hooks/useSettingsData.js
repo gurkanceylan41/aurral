@@ -49,7 +49,7 @@ const defaultSettings = {
     intervalDays: 2,
   },
   missingTrackSearch: {
-    enabled: true,
+    enabled: false,
     intervalDays: 1,
   },
   releaseTypes: allReleaseTypes,

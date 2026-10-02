@@ -173,6 +173,7 @@ const originalWorkerStart = weeklyFlowWorker.start;
 
 test.before(() => {
   setDownloadSourceConfigured(true);
+  dbOps.updateSettings({ ...dbOps.getSettings(), missingTrackSearch: { enabled: true, intervalDays: 1 } });
   lidarrClient.isConfigured = () => false;
   for (const method of ["request", "getArtist", "getArtistByMbid"]) {
     lidarrClient[method] = async (...args) => {
@@ -374,6 +375,21 @@ test("the stored interval and switch control the run", async () => {
   } finally {
     dbOps.updateSettings(settings);
   }
+});
+
+test("a fresh install does not search until the search is turned on", async () => {
+  const { album, albumMbid } = createAlbum();
+  const settings = dbOps.getSettings();
+  db.prepare("DELETE FROM settings WHERE key = 'missingTrackSearch'").run();
+  dbOps.invalidateSettingsCache();
+  try {
+    assert.equal(await runMissingTrackSearch(), 0);
+  } finally {
+    dbOps.updateSettings(settings);
+  }
+
+  assert.equal(albumJobs(albumMbid).length, 0);
+  assert.equal(searchTime(album.id), null);
 });
 
 test("without a download source nothing is queued or marked as searched", async () => {
