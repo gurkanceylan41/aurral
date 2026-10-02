@@ -11,6 +11,8 @@ export const MONITORED_AURRAL_ALBUM_CONDITION = `
   AND json_extract(album.metadata_json, '$.monitored') = 1
 `;
 
+export const monitoredTrackCondition = (trackAlias) => `${trackAlias}.monitored = 1`;
+
 export function resolveAurralMonitorMode(value) {
   const mode = String(value ?? "none").trim().toLowerCase() || "none";
   if (AURRAL_MONITOR_MODES.has(mode)) return { mode };

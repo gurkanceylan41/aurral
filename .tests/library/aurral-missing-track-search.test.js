@@ -14,6 +14,7 @@ const [
   { weeklyFlowWorker },
   { lidarrClient },
   { libraryManager },
+  { getCanonicalLibraryForAlbumIds },
   { recordMissingTrackSearch },
   { runMissingTrackSearch },
   { SCHEDULED_SYSTEM_TASKS },
@@ -28,6 +29,7 @@ const [
   "backend/services/weeklyFlow/weeklyFlowWorker.js",
   "backend/services/lidarrClient.js",
   "backend/services/libraryManager.js",
+  "backend/services/libraryQueryService.js",
   "backend/services/aurralHistoryService.js",
   "backend/services/aurralMissingTrackSearch.js",
   "backend/services/honkerDb.js",
@@ -142,6 +144,9 @@ const searchTime = (albumId) =>
   db.prepare(
     "SELECT last_missing_search_at FROM library_management WHERE entity_kind = 'album' AND entity_id = ?",
   ).get(albumId)?.last_missing_search_at ?? null;
+
+const setTrackMonitored = (trackId, monitored) =>
+  db.prepare("UPDATE library_tracks SET monitored = ? WHERE id = ?").run(monitored ? 1 : 0, trackId);
 
 const albumJobs = (albumMbid) =>
   downloadTracker.getAll().filter((job) => job.albumMbid === albumMbid);
@@ -341,6 +346,57 @@ test("an album is searched even when its artist row id matches another artist's 
 
   assert.equal(await runMissingTrackSearch(), 1);
   assert.equal(albumJobs(albumMbid).length, 1);
+});
+
+test("the search skips an unmonitored track and still queues the album's other missing tracks", async () => {
+  const { albumMbid, tracks, jobIds } = createAlbum({ tracks: ["missing", "failed", "missing"] });
+  setTrackMonitored(tracks[0].id, false);
+
+  assert.equal(await runMissingTrackSearch(), 1);
+
+  assert.equal(albumJobs(albumMbid).some((job) => job.trackMbid === tracks[0].mbid), false);
+  assert.equal(downloadTracker.getJob(jobIds[1]).status, "pending");
+  assert.equal(albumJobs(albumMbid).find((job) => job.trackMbid === tracks[2].mbid)?.status, "pending");
+});
+
+test("an album whose only missing tracks are unmonitored is not due", async () => {
+  const { album, albumMbid, tracks } = createAlbum({ tracks: ["missing", "available"] });
+  setTrackMonitored(tracks[0].id, false);
+
+  assert.equal(await runMissingTrackSearch(), 0);
+  assert.equal(albumJobs(albumMbid).length, 0);
+  assert.equal(searchTime(album.id), null);
+});
+
+test("Retry and turning an album back on skip unmonitored tracks", async () => {
+  const retried = createAlbum({ tracks: ["missing", "missing"] });
+  setTrackMonitored(retried.tracks[0].id, false);
+  await libraryManager.addAlbum(retried.artist.id, retried.albumMbid, retried.album.title, { managedBy: "aurral" });
+  assert.deepEqual(albumJobs(retried.albumMbid).map((job) => job.trackMbid), [retried.tracks[1].mbid]);
+
+  const toggled = createAlbum({ tracks: ["missing", "missing"] });
+  setTrackMonitored(toggled.tracks[1].id, false);
+  await libraryManager.setAurralAlbumMonitoring(toggled.album.id, { monitored: false });
+  await libraryManager.setAurralAlbumMonitoring(toggled.album.id, { monitored: true });
+  assert.deepEqual(albumJobs(toggled.albumMbid).map((job) => job.trackMbid), [toggled.tracks[0].mbid]);
+});
+
+test("a library rescan keeps a track unmonitored, and the Library reports it", () => {
+  const { album, artist, tracks } = createAlbum({ tracks: ["missing", "missing"] });
+  setTrackMonitored(tracks[0].id, false);
+
+  libraryStore.upsertLibraryTrack({
+    identityKey: `recording:${tracks[0].mbid}`,
+    mbid: tracks[0].mbid,
+    title: tracks[0].title,
+    artistName: artist.name,
+    metadata: { rescanned: true },
+  });
+
+  const library = getCanonicalLibraryForAlbumIds({ ids: [album.id] });
+  const monitoredById = new Map(library.tracks.map((track) => [track.id, track.monitored]));
+  assert.equal(monitoredById.get(tracks[0].id), false);
+  assert.equal(monitoredById.get(tracks[1].id), true);
 });
 
 test("searching an album leaves cancelled tracks alone, including an older cancelled job", async () => {

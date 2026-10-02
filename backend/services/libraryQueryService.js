@@ -92,6 +92,7 @@ const CANONICAL_SELECT = `SELECT
   track.title AS track_title,
   track.artist_name AS track_artist_name,
   track.metadata_json AS track_metadata_json,
+  track.monitored AS track_monitored,
   track.created_at AS track_created_at,
   album_track.disc_number,
   album_track.track_number,
@@ -183,6 +184,7 @@ function buildLibraryFromRows(rows) {
       createdAt: row.track_created_at,
       metadata: trackMetadata,
       providerId: trackMetadata?.id ?? null,
+      monitored: row.track_monitored !== 0,
       albums: [],
       files: [],
       sources: [],
@@ -190,7 +192,6 @@ function buildLibraryFromRows(rows) {
     });
     track.managedBy = album.managedBy ?? null;
     track.monitorMode = album.monitorMode ?? null;
-    track.monitored = album.monitored;
 
     if (!artist.albumIds.includes(album.id)) artist.albumIds.push(album.id);
     if (!album.trackIds.includes(track.id)) album.trackIds.push(track.id);

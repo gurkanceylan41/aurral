@@ -53,6 +53,7 @@ import {
 import {
   listAurralArtistReleases,
   MONITORED_AURRAL_ALBUM_CONDITION,
+  monitoredTrackCondition,
   resolveAurralMonitorMode,
   selectAurralReleases,
 } from "./aurralMonitoring.js";
@@ -108,6 +109,12 @@ const monitoredAurralAlbumStmt = db.prepare(`
 `);
 
 const isMonitoredAurralAlbum = (albumId) => Boolean(monitoredAurralAlbumStmt.get(Number(albumId)));
+
+const monitoredTrackStmt = db.prepare(
+  `SELECT 1 FROM library_tracks AS track WHERE track.id = ? AND ${monitoredTrackCondition("track")}`,
+);
+
+const isMonitoredTrack = (trackId) => Boolean(monitoredTrackStmt.get(Number(trackId)));
 
 async function serializeMonitoringUpdate(updates, id, update) {
   const previous = updates.get(id) || Promise.resolve();
@@ -238,7 +245,7 @@ function mapCanonicalTrack(track, album) {
     source: file?.source || null,
     managedBy: album?.managedBy || null,
     monitorMode: album?.monitorMode || null,
-    monitored: album?.metadata?.monitored === true,
+    monitored: track.monitored !== false,
     sources: track.sources,
     size: Number(file?.size || 0),
     quality:
@@ -1626,7 +1633,13 @@ export class LibraryManager {
       albumJobs.find((job) => job.requestGroupId)?.requestGroupId ||
       randomUUID();
     const albumTrackTitles = albumTracks.map((track) => track.title).filter(Boolean);
-    const missingTracks = albumTracks.filter((track) => track.available !== true);
+    const requestedTrackIds = Array.isArray(options.trackIds)
+      ? new Set(options.trackIds.map(Number))
+      : null;
+    const missingTracks = albumTracks.filter((track) =>
+      track.available !== true &&
+      track.monitored !== false &&
+      (!requestedTrackIds || requestedTrackIds.has(Number(track.id))));
     const sourceConfigured = isAnyDownloadSourceConfigured();
     const jobIds = [];
     const trackedJobIds = [];
@@ -1635,9 +1648,12 @@ export class LibraryManager {
       (!options.monitoringMode ||
         this._canAcquireMonitoredAlbum(options.artistMbid, albumMbid, options.monitoringMode)) &&
       (!options.requireMonitoredAlbum || isMonitoredAurralAlbum(album.id));
-    const applyJobChange = (change) => {
+    const applyJobChange = (change, trackId) => {
       const result = options.monitoringMode || options.requireMonitoredAlbum
-        ? db.transaction(() => (canChangeJobs() ? { value: change() } : { skipped: true })).immediate()
+        ? db.transaction(() => {
+          if (!canChangeJobs()) return { skipped: true };
+          return isMonitoredTrack(trackId) ? { value: change() } : { trackSkipped: true };
+        }).immediate()
         : { value: change() };
       albumJobs = findAurralAlbumJobs(albumMbid);
       return result;
@@ -1675,14 +1691,14 @@ export class LibraryManager {
           return { status: "skipped" };
         }
         if (!sourceConfigured) {
-          if (applyJobChange(() => downloadTracker.setFailed(completedJob.id, "Completed file is missing")).skipped) {
+          if (applyJobChange(() => downloadTracker.setFailed(completedJob.id, "Completed file is missing"), track.id).skipped) {
             return { status: "skipped" };
           }
           continue;
         }
         const retriedCompletedJob = applyJobChange(() => downloadTracker.setPending(completedJob.id, "Completed file is missing", {
           asRetryCycle: true,
-        }));
+        }), track.id);
         if (retriedCompletedJob.skipped) return { status: "skipped" };
         if (retriedCompletedJob.value) {
           jobIds.push(completedJob.id);
@@ -1701,7 +1717,7 @@ export class LibraryManager {
           return downloadTracker.setPending(retryJob.id, "Retrying missing Aurral album track", {
             asRetryCycle: true,
           });
-        });
+        }, track.id);
         if (retriedJob.skipped) return { status: "skipped" };
         if (retriedJob.value) {
           jobIds.push(retryJob.id);
@@ -1734,7 +1750,7 @@ export class LibraryManager {
           reason: "Aurral album request",
         },
         "library",
-      ));
+      ), track.id);
       if (queuedJob.skipped) return { status: "skipped" };
       const jobId = queuedJob.value;
       if (jobId) {

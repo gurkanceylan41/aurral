@@ -2,7 +2,7 @@ import { db } from "../config/db-sqlite.js";
 import { dbOps } from "../db/helpers/index.js";
 import { ACTIVE_JOB_STATUSES, indexAurralAlbumJobs, jobMatchesTrack } from "./aurralAlbumJobs.js";
 import { recordMissingTrackSearch } from "./aurralHistoryService.js";
-import { MONITORED_AURRAL_ALBUM_CONDITION } from "./aurralMonitoring.js";
+import { MONITORED_AURRAL_ALBUM_CONDITION, monitoredTrackCondition } from "./aurralMonitoring.js";
 import { isAnyDownloadSourceConfigured } from "./downloadSourceService.js";
 import { libraryManager } from "./libraryManager.js";
 import { albumMediaCondition } from "./libraryQueryService.js";
@@ -12,7 +12,8 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 const MISSING_TRACK_CONDITION = `
-  NOT EXISTS (
+  ${monitoredTrackCondition("track")}
+  AND NOT EXISTS (
     SELECT 1 FROM library_media_files AS media
     WHERE media.track_id = link.track_id
       AND media.available = 1
@@ -36,6 +37,7 @@ const candidateAlbumsStmt = db.prepare(`
     AND (management.last_missing_search_at IS NULL OR management.last_missing_search_at <= ?)
     AND EXISTS (
       SELECT 1 FROM library_album_tracks AS link
+      JOIN library_tracks AS track ON track.id = link.track_id
       WHERE link.album_id = album.id AND ${MISSING_TRACK_CONDITION}
     )
 `);
