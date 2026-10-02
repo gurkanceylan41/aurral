@@ -30,6 +30,7 @@ import {
 
 import ArtistImage from "../components/ArtistImage";
 import { useAurralAlbumMonitoring } from "../components/AurralAlbumMonitoring";
+import { useAurralTrackMonitoring } from "../components/AurralTrackMonitoring";
 import { AurralAlbumStatus } from "../components/AurralAlbumStatus";
 import { DotLoader } from "../components/DotLoader";
 import { LibraryItemMenu, LibraryItemSubmenu } from "../components/LibraryItemMenu";
@@ -1409,6 +1410,25 @@ function LibraryPage() {
     canChange: canChangeMonitoring,
     onChanged: updateAlbumMonitoringState,
   });
+  const updateTrackMonitoringState = useCallback(
+    (trackId, result) => {
+      const monitored = result?.monitored !== false;
+      const mark = (track) =>
+        String(track.id) === String(trackId) ? { ...track, monitored } : track;
+      setLibrary((current) => ({ ...current, tracks: current.tracks.map(mark) }));
+      queryClient.setQueriesData({ queryKey: queryKeys.libraryAlbumTracksPrefix }, (data) =>
+        Array.isArray(data?.tracks) ? { ...data, tracks: data.tracks.map(mark) } : data,
+      );
+      clearCanonicalLibraryPageCache();
+      refreshLibraryActivity();
+    },
+    [refreshLibraryActivity, setLibrary],
+  );
+  const trackMonitoring = useAurralTrackMonitoring({
+    albumMonitored: albumMonitoring.monitored,
+    canChange: canChangeMonitoring,
+    onChanged: updateTrackMonitoringState,
+  });
 
   const reloadLibraryAlbumTracks = useCallback(async () => {
     if (!libraryAlbum) return;
@@ -1803,6 +1823,7 @@ function LibraryPage() {
           (entry) => String(entry.albumId) === String(album?.id),
         )?.trackNumber;
         const isFavorite = favoriteIds.has(favoriteId("song", track));
+        const monitoringItem = trackMonitoring.getMenuItem(track, { downloadPending });
         const trackMenuItems = [
           {
             id: "play",
@@ -1849,6 +1870,7 @@ function LibraryPage() {
                 },
               ]
             : []),
+          ...(monitoringItem ? [monitoringItem] : []),
           ...(album
             ? [
                 {
@@ -1887,6 +1909,11 @@ function LibraryPage() {
           key: track.id,
           number: variant === "release" && trackNumber ? trackNumber : index + 1,
           title: track.title || "Unknown Track",
+          badge: track.monitored === false ? (
+            <span className="native-library-track__unmonitored" role="img" aria-label="Not monitored">
+              <EyeOff aria-hidden="true" />
+            </span>
+          ) : null,
           subtitle: sourceLabel ? `${artistName} · ${sourceLabel}` : artistName,
           artist: { label: artistName, onOpen: artist ? () => handleArtistOpen(artist) : null },
           album: { label: albumName, onOpen: album ? () => handleAlbumOpen(album) : null },
@@ -2483,6 +2510,7 @@ function LibraryPage() {
           variant: "release",
         })}
         {albumMonitoring.dialog}
+        {trackMonitoring.dialog}
       </section>
     );
   };
