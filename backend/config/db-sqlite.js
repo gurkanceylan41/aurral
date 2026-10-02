@@ -900,6 +900,7 @@ export const dbHelpers = {
 };
 
 initializeSchemaOnStartup(db, dbHelpers);
+tryAddColumn("ALTER TABLE library_management ADD COLUMN last_missing_search_at INTEGER");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS playlist_download_jobs_revision (
